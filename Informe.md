@@ -77,6 +77,93 @@ B. ¿Cuál es la dirección que aparece en el script del linker?¿Porqué es nec
 
 La dirección que aparece en el script del linker (. = 0x7c00;), establece el contador de ubicación (.) al valor físico 0x7C00, que es donde la BIOS carga el sector 0 del disco en modo real. Esa dirección VMA (virtual memory address) se usa para calcular los desplazamientos de todas las instrucciones y referencias a datos. Si el linker no sabe en qué dirección va a quedar el código, no puede parchear correctamente las referencias.  
 
+C. Compare la salida de objdump con hd, verifique donde fue colocado el programa dentro de la imagen.  
+
+A la hora de ver el resultado de objdump obtenemos lo siguiente:  
+IMAGEN_OBJDUMP  
+Aqui observamos la direccion virtual donde vive cada instruccion.  
+* La primera instrucción en 0x7C00 es mov $0x7c10, %si (bytes be 10 7c).  
+* Luego, el bucle de impresión utiliza lods e int 0x10 para mostrar caracteres.
+* Los jmp y nop (dec %ax, outs, insb, etc.) corresponden a relleno o instrucciones del mensaje.
+  
+Y ahora si vemos el resultado de hd:
+IMAGEN_HD  
+* Offset 0x00 en el archivo contiene be 10 7c, que corresponde al mov $0x7c10, %si mostrado en objdump a 0x7C00.
+* Offset 0x0F (90 o instrucción de relleno) y 0x10 (48, primer byte de "H") coinciden con las direcciones 0x7C0F y 0x7C10 en la vista de objdump.
+* Los bytes ASCII de "Hola Mundo" (48 6f 6c 61 20 4d 75 6e 64 6f) aparecen en offset 0x10 del archivo, y en memoria a 0x7C10.
+  
+Mapeo de offset a direccion virtual:
+* Cualquier byte en el archivo en offset n se mapea a la dirección 0x7C00 + n en memoria.
+* Ejemplo: el byte 0x48 ('H') en offset 0x10 aparece a 0x7C10 → mov $0x7c10, %si carga ese puntero.
+Con este análisis, podemos observar cómo la salida de objdump y hd coinciden y asi confirmar la ubicación exacta del código y los datos dentro de la imagen del bootloader.
+
+D. Grabar la imagen en un pendrive y probarla en una pc y subir una foto.  
+
+Para realizar esta actividad, escribimos un codigo el cual debe mostrar “Hola mundo” acompañado del nombre del grupo en la pantalla. Debido a que tuvimos problemas para ejecutarlo desde el pendrive (la bios nos salteaba el boot desde el pendrive y ejecutaba directamente el SO), decidimos optar por la ejecución en una maquina virtual (QEMU) y obtuvimos lo siguiente:  
+IMAGEN_HOLAMUNDO
+
+E. ¿Para que se utiliza la opción --oformat binary en el linker?  
+
+La opción --oformat binary en el linker, se utiliza para indicar al linker que no genere un ejecutable en formato ELF (con cabeceras, secciones, tablas, etc.), sino que saque directamente los bytes de las secciones .text/.data/.bss agrupadas según el script. El resultado es un raw image listo para copiar en un sector de arranque o volcar con dd a una partición sin más envoltorio.  
+
+### **Desafio final: Modo Protegido**  
+A. Crear un código assembler que pueda pasar a modo protegido (sin macros).
+
+El codigo se encuentra en el archivo Modo_protegido.asm dentro de la carpeta vscode.  
+Básicamente en este codigo observamos que se crea una GDT con descriptor nulo, uno de código (base=0, 4GiB, exec+read) y uno de datos (base=0x00200000, R/W) separados. Tambien se ajustan los bits de acceso para diferenciarlos. Y por ultimo, tras cargar la GDT, se activa PE y se salta a código 32-bit.  
+
+B. ¿Cómo sería un programa que tenga dos descriptores de memoria diferentes, uno para cada segmento (código y datos) en espacios de memoria diferenciados?  
+
+Un programa que tenga dos descriptores de memoria diferentes, deberia tener la siguiente pinta:  
+Código: Selector 0x08, apunta al segundo descriptor en GDT.  
+Datos: Selector 0x10, apunta al tercer descriptor en GDT.  
+Elegimos la base de datos en 0x00200000 para diferenciar espacios.  
+
+C. Cambiar los bits de acceso del segmento de datos para que sea de solo lectura,  intentar escribir, ¿Que sucede? ¿Que debería suceder a continuación? (revisar el teórico) Verificarlo con gdb.  
+
+Modificamos el archivo Modo_protegido.asm, especificamente la linea 46 pasamos de db 10010010b a db10010000b y en pm_entry luego de cargar todos los registros de segmento con el selector de datos vamos a agregar mov dword [0x00200000], 0xDEADBEEF que intentara escribir el segmento de datos.  
+Lo que sucede es que al intertar escribir el segmento que esta en modo solo lectura esto causa excepcion correspondiente a una General Protection Fault (GPF). A continuacion, si tenés configurado un manejador para la interrupción 0x0D, el sistema operativo (o tu código si estás en bare-metal) maneja la excepción (por ejemplo, mostrando un error, matando el proceso, etc.), si no hay un manejador válido, el sistema puede detenerse o reiniciarse (dependiendo del entorno).  
+  
+En nuestro caso especifico, la ejectucion se corta y se cierra abruptamente la maquina virtual QEMU esto se debe a que salto la General Protection Fault (GPF) y como no tenemos un manejador de de excepciones para capturar la GPF y manejarla adecuadamente la maquina virtual lo interpreta como una falla y cierra la ejecucion.  
+Para verificarlo vamos a configurar para que QEMU trate la excepcion y ver los registros en ese momento, esta informacion de salida se guardara en el archivo Salida_QEMU.txt que esta dentro de la carpeta vscode. Analisis:  
+1- Excepcion detectada "check_exception old: 0x8 new 0xd" Esto indica que ocurrió una excepción 0x0D, que corresponde a una General Protection Fault (GPF).  
+  
+2- Estado de los registros en el momento de la excepción:  
+   EAX=00000010 EBX=00000000 ECX=00000000 EDX=00000080  
+   ESI=00000000 EDI=00000000 EBP=00000000 ESP=00007c00  
+   EIP=00007c48 EFL=00000006 [-----P-] CPL=0 II=0 A20=1 SMM=0 HLT=0  
+     
+   * EIP=00007c48: La instrucción que causó la excepción está en la dirección 0x7C48. Esto corresponde a la línea de código donde se intenta escribir en el segmento de datos.  
+   * FL=00000006: Los flags indican que no hay interrupciones habilitadas (IF=0), lo cual es correcto para evitar interferencias.
+  
+3- Segmentos de la GDT:  
+   ES =0010 00200000 ffffffff 00cf9100 DPL=0 DS   [--A]  
+   CS =0008 00000000 ffffffff 00cf9a00 DPL=0 CS32 [-R-]  
+   SS =0000 00000000 0000ffff 00009300 DPL=0 DS16 [-WA]  
+   DS =0010 00200000 ffffffff 00cf9100 DPL=0 DS   [--A]  
+   * DS=0010: El segmento de datos está configurado correctamente con el selector 0x10 (índice 2 en la GDT).  
+   * DPL=0: El nivel de privilegio del segmento es 0 (Ring 0).  
+   * [--A]: El segmento está configurado como solo lectura (Access Byte = 10010000b), lo que confirma que la configuración de la GDT es correcta.  
+  
+4- Registro de control CR0: CR0=00000011, El bit PE (Protection Enable) está activado (CR0[0]=1), lo que confirma que estás en modo protegido.  
+5- Dirección de la GDT: GDT=00007c1e 00000017, La GDT está ubicada en la dirección 0x7C1E con un tamaño de 0x17 bytes, lo cual coincide con nuestra configuración.  
+
+Con esto podemos afirmar que la excepción General Protection Fault (GPF) ocurrió porque intentamos escribir en un segmento configurado como solo lectura y esto confirma que el descriptor de datos en la GDT está funcionando correctamente.  
+
+D. En modo protegido, ¿Con qué valor se cargan los registros de segmento ? ¿Porque?  
+
+Los registros de segmento, en modo protegido se cargan de la siguiente manera:  
+* Al entrar a modo protegido, CS = CODE_SEL (0x08).
+* Los registros de datos DS, ES, FS, GS, SS = DATA_SEL (0x10).
+Esto se debe a que el far jump inicial (jmp CODE_SEL:pm_entry) recarga CS con el selector de código correcto, y luego cargamos manualmente DS...SS con el selector de datos.
+
+
+
+
+
+
+   
+
 
 
 
