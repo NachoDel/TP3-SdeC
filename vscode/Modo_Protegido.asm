@@ -39,11 +39,11 @@ gdt_start:
     db 0x00             ; Base 31:24
 
     ; Descriptor de datos (índice 2)
-    ; Base = 0x00200000, Límite = 0x0FFFFF (1 MB), Lectura/Escritura, Ring 0
+    ; Base = 0x00200000, Límite = 0x0FFFFF (1 MB), Solo lectura, Ring 0
     dw 0xFFFF           ; Límite 15:0
     dw 0x0000           ; Base 15:0
     db 0x20             ; Base 23:16 (Base = 0x00200000)
-    db 10010010b        ; Access Byte: Presente, Ring 0, Datos, Read/Write
+    db 10010000b        ; Access Byte: Presente, Ring 0, Datos, Read-Only
     db 11001111b        ; Flags: 4K Granularidad, 32-bit segment, Límite 19:16
     db 0x00             ; Base 31:24
 gdt_end:
@@ -68,6 +68,9 @@ pm_entry:
     mov fs, ax
     mov gs, ax
     mov ss, ax
+
+    ; Intentar escribir en el segmento de datos (esto debería fallar si es solo lectura)
+    mov dword [0x00200000], 0xDEADBEEF
 
     ; A partir de aquí estamos en modo protegido y usando segmentos de 32 bits
     ; Loop infinito que ejecuta HLT (detener CPU hasta próxima interrupción)
