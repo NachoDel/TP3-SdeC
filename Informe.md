@@ -1,10 +1,9 @@
 # Universidad Nacional de Córdoba
 
-![][image1]
 
-### *Facultad de ciencias exactas, físicas y naturales*
+## *Facultad de ciencias exactas, físicas y naturales*
 
-##### Sistemas de Computación – Practico \#3 Modo Protegido
+### Sistemas de Computación – Practico \#3 Modo Protegido
 
 ##### Alumnos: 
 - Delamer, Ignacio
@@ -80,14 +79,14 @@ La dirección que aparece en el script del linker (. = 0x7c00;), establece el co
 C. Compare la salida de objdump con hd, verifique donde fue colocado el programa dentro de la imagen.  
 
 A la hora de ver el resultado de objdump obtenemos lo siguiente:  
-IMAGEN_OBJDUMP  
+![](img/1.png)  
 Aqui observamos la direccion virtual donde vive cada instruccion.  
 * La primera instrucción en 0x7C00 es mov $0x7c10, %si (bytes be 10 7c).  
 * Luego, el bucle de impresión utiliza lods e int 0x10 para mostrar caracteres.
 * Los jmp y nop (dec %ax, outs, insb, etc.) corresponden a relleno o instrucciones del mensaje.
   
 Y ahora si vemos el resultado de hd:
-IMAGEN_HD  
+![](img/2.png)   
 * Offset 0x00 en el archivo contiene be 10 7c, que corresponde al mov $0x7c10, %si mostrado en objdump a 0x7C00.
 * Offset 0x0F (90 o instrucción de relleno) y 0x10 (48, primer byte de "H") coinciden con las direcciones 0x7C0F y 0x7C10 en la vista de objdump.
 * Los bytes ASCII de "Hola Mundo" (48 6f 6c 61 20 4d 75 6e 64 6f) aparecen en offset 0x10 del archivo, y en memoria a 0x7C10.
@@ -100,7 +99,7 @@ Con este análisis, podemos observar cómo la salida de objdump y hd coinciden y
 D. Grabar la imagen en un pendrive y probarla en una pc y subir una foto.  
 
 Para realizar esta actividad, escribimos un codigo el cual debe mostrar “Hola mundo” acompañado del nombre del grupo en la pantalla. Debido a que tuvimos problemas para ejecutarlo desde el pendrive (la bios nos salteaba el boot desde el pendrive y ejecutaba directamente el SO), decidimos optar por la ejecución en una maquina virtual (QEMU) y obtuvimos lo siguiente:  
-IMAGEN_HOLAMUNDO
+![](img/3.png)  
 
 E. ¿Para que se utiliza la opción --oformat binary en el linker?  
 
