@@ -9,5 +9,8 @@
 ## GRUPO: 
 CODE GENESIS
 
-## INDICE:
+## INDICE:  
+Carpeta 'vscode' --> Codigo .asm, archivo .bin y salida de depuracion.  
+Carpeta 'img' --> Imagenes presentes en el informe.  
+Markdown 'Informe.md' --> Informe completo de todo el trabajo.  
 
